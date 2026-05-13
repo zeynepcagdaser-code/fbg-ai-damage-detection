@@ -1,0 +1,20 @@
+.DS_Store
+Thumbs.db
+
+__pycache__/
+*.py[cod]
+
+.venv/
+venv/
+
+.vscode/
+
+*.log
+
+# Generated outputs
+plots/
+results/
+
+# Model caches
+models/__pycache__/
+models/saved/
