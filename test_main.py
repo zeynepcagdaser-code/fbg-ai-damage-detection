@@ -3,6 +3,7 @@ FBG Spektrumu Analiz - Basit Test Script'i
 (TensorFlow olmadan, klasik yöntemler ve NumPy tabanlı test)
 """
 
+# Legacy test file: Streamlit deploy/panel akışında kullanılmaz.
 import sys
 from pathlib import Path
 import numpy as np
@@ -14,11 +15,11 @@ warnings.filterwarnings('ignore')
 
 # Proje klasörlerini sys.path'e ekle
 project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root / "utils"))
+sys.path.insert(0, str(project_root))
 
-from data_generator import FBGDataGenerator
-from preprocessor import FBGPreprocessor, SignalMetrics
-from classical_methods_fixed import ClassicalSpectralMethods, SpectrumClassifier
+from utils.data_generator import FBGDataGenerator
+from utils.preprocessor import FBGPreprocessor, SignalMetrics
+from utils.classical_methods_fixed import ClassicalSpectralMethods, SpectrumClassifier
 
 
 def test_data_generation():

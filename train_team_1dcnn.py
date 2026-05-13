@@ -14,7 +14,16 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
 import tensorflow as tf
-from tensorflow.keras import layers, models, callbacks
+from tensorflow.keras.models import Sequential, load_model
+from tensorflow.keras.layers import (
+    Input,
+    Conv1D,
+    MaxPooling1D,
+    Dense,
+    Dropout,
+    GlobalAveragePooling1D,
+)
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
 
 
 PROJECT_ROOT = Path(__file__).parent
@@ -68,17 +77,17 @@ def window_series(series, labels, window_size=64, stride=16):
 
 
 def build_team_cnn(input_shape=(64, 1), num_classes=3):
-    model = models.Sequential([
-        layers.Input(shape=input_shape),
-        layers.Conv1D(32, kernel_size=3, activation='relu', padding='same'),
-        layers.MaxPool1D(pool_size=2),
-        layers.Conv1D(64, kernel_size=3, activation='relu', padding='same'),
-        layers.MaxPool1D(pool_size=2),
-        layers.Conv1D(128, kernel_size=3, activation='relu', padding='same'),
-        layers.GlobalAveragePooling1D(),
-        layers.Dense(64, activation='relu'),
-        layers.Dropout(0.3),
-        layers.Dense(num_classes, activation='softmax')
+    model = Sequential([
+        Input(shape=input_shape),
+        Conv1D(32, kernel_size=3, activation='relu', padding='same'),
+        MaxPooling1D(pool_size=2),
+        Conv1D(64, kernel_size=3, activation='relu', padding='same'),
+        MaxPooling1D(pool_size=2),
+        Conv1D(128, kernel_size=3, activation='relu', padding='same'),
+        GlobalAveragePooling1D(),
+        Dense(64, activation='relu'),
+        Dropout(0.3),
+        Dense(num_classes, activation='softmax')
     ])
     model.compile(
         optimizer='adam',
@@ -151,8 +160,9 @@ def main():
 
     ckpt_path = MODEL_DIR / "fbg_team_1dcnn_best.keras"
     callback_list = [
-        callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True),
-        callbacks.ModelCheckpoint(str(ckpt_path), monitor='val_loss', save_best_only=True, verbose=1)
+        EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True),
+        ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=4, min_lr=1e-6, verbose=1),
+        ModelCheckpoint(str(ckpt_path), monitor='val_loss', save_best_only=True, verbose=1),
     ]
 
     history = model.fit(
@@ -176,7 +186,7 @@ def main():
         print(f"Eğitim geçmişi kaydedilemedi: {exc}")
 
     if ckpt_path.exists():
-        model = tf.keras.models.load_model(str(ckpt_path))
+        model = load_model(str(ckpt_path))
 
     print("Test verisi üzerinde değerlendirme...")
     y_pred_probs = model.predict(X_test, verbose=0)

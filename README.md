@@ -1,22 +1,51 @@
 # FBG Sensörlerde Yapay Zekâ ile Hasar Tespiti (Streamlit)
 
-Bu proje, Simay ve Aleyna’dan gelen FBG zaman serisi verilerini kullanarak **CNN/LSTM tabanlı hasar tespiti** yapan Streamlit panelidir.
+Bu repo, FBG sensör zaman serisi verilerinden **3 sınıflı** hasar tespiti yapan Streamlit dashboard’udur:
 
-## Lokal çalıştırma
+- Normal
+- Hafif Hasar
+- Ağır Hasar
+
+## Çalıştırma (Lokal)
 
 ```bash
 pip install -r requirements.txt
 streamlit run panel.py
 ```
 
-## Kalıcı paylaşım (Streamlit Community Cloud)
+## Streamlit Cloud Deploy (Kalıcı Link)
 
-1. Bu projeyi GitHub’a push et.
-2. Streamlit Community Cloud’da “New app” → repo’yu seç.
-3. **Main file path**: `panel.py`
-4. Deploy et; oluşan URL kalıcıdır. Repo’ya yeni commit push edince otomatik güncellenir.
+1. Streamlit Community Cloud → **New app**
+2. Repo: `zeynepcagdaser-code/fbg-ai-damage-detection`
+3. Branch: `main`
+4. Main file path: `panel.py`
+5. Deploy
 
-## Notlar
+`runtime.txt` içinde `python-3.11` tanımlıdır (TensorFlow uyumu için).
 
-- CNN modeli dosyası: `models/fbg_team_1dcnn.keras`
-- Model yoksa panel çökmez; panel içinden eğitim başlatılabilir.
+## Beklenen Veri Formatı
+
+Yükleme sırasında CSV/XLSX kabul edilir.
+
+Zorunlu sütunlar:
+- `time` veya `zaman`
+- `delta_lambda_noisy`
+
+Opsiyonel sütunlar:
+- `delta_lambda_filtered` (yoksa panel `delta_lambda_noisy` üzerinden moving average üretir)
+- `label` veya `etiket` (varsa metrikler hesaplanır)
+
+## Model
+
+- Model dosyası: `models/fbg_team_1dcnn.keras`
+- Model yoksa panel çökmez; kullanıcıya uyarı verir ve sadece veri görselleştirir.
+
+## Ekip Görev Dağılımı (Özet)
+
+- Simay: Fiziksel modelleme (Simulink) → ham zaman serisi
+- Aleyna: Gürültü temizleme → `delta_lambda_filtered`
+- Gizem: Feature engineering → ölçekleme + pencereleme
+- Zeynep: 1D CNN modeli
+- Emine: LSTM modeli (planlı)
+- Çağla: Hasar analizi / yorum
+- Zeynep & Emine: Entegrasyon ve dashboard
