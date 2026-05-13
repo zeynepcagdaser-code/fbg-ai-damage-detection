@@ -20,6 +20,7 @@ from tensorflow.keras.layers import (
     Input,
     Conv1D,
     MaxPooling1D,
+    BatchNormalization,
     Dense,
     Dropout,
     GlobalAveragePooling1D,
@@ -51,8 +52,8 @@ def load_team_timeseries(path):
 
     series = df['delta_lambda_filtered'].astype(float).values
     labels = df['label'].astype(str).values
-    if len(series) < 64:
-        raise ValueError("Veri yeterli uzunlukta değil. En az 64 nokta olmalı.")
+    if len(series) < 32:
+        raise ValueError("Veri yeterli uzunlukta değil. En az 32 nokta olmalı.")
 
     return series, labels
 
@@ -65,7 +66,7 @@ def normalize_series(series):
     return (series - min_val) / (max_val - min_val)
 
 
-def window_series(series, labels, window_size=64, stride=16):
+def window_series(series, labels, window_size=32, stride=8):
     X = []
     y = []
     for start in range(0, len(series) - window_size + 1, stride):
@@ -77,17 +78,17 @@ def window_series(series, labels, window_size=64, stride=16):
     return np.array(X, dtype=np.float32)[..., np.newaxis], np.array(y, dtype=object)
 
 
-def build_team_cnn(input_shape=(64, 1), num_classes=3):
+def build_team_cnn(input_shape=(32, 1), num_classes=3):
     model = Sequential([
         Input(shape=input_shape),
+        Conv1D(16, kernel_size=3, activation='relu', padding='same'),
+        BatchNormalization(),
+        MaxPooling1D(pool_size=2),
         Conv1D(32, kernel_size=3, activation='relu', padding='same'),
-        MaxPooling1D(pool_size=2),
-        Conv1D(64, kernel_size=3, activation='relu', padding='same'),
-        MaxPooling1D(pool_size=2),
-        Conv1D(128, kernel_size=3, activation='relu', padding='same'),
+        BatchNormalization(),
         GlobalAveragePooling1D(),
-        Dense(64, activation='relu'),
-        Dropout(0.3),
+        Dense(32, activation='relu'),
+        Dropout(0.35),
         Dense(num_classes, activation='softmax')
     ])
     model.compile(
@@ -102,18 +103,26 @@ def plot_confusion_matrix(cm, class_names, save_path):
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(6, 5))
     im = ax.imshow(cm, interpolation='nearest', cmap='Blues')
-    ax.set_title('Confusion Matrix')
+    ax.set_title('Karmaşıklık Matrisi (Confusion Matrix)', fontweight='bold')
     ax.set_xticks(np.arange(len(class_names)))
     ax.set_yticks(np.arange(len(class_names)))
-    ax.set_xticklabels(class_names, rotation=45, ha='right')
-    ax.set_yticklabels(class_names)
+    ax.set_xticklabels(class_names, rotation=30, ha='right', fontsize=12)
+    ax.set_yticklabels(class_names, fontsize=12)
     plt.colorbar(im, ax=ax)
 
     thresh = cm.max() / 2.
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
-            ax.text(j, i, format(cm[i, j], 'd'), ha="center", va="center",
-                    color="white" if cm[i, j] > thresh else "black")
+            ax.text(
+                j,
+                i,
+                format(cm[i, j], 'd'),
+                ha="center",
+                va="center",
+                color="white" if cm[i, j] > thresh else "black",
+                fontsize=13,
+                fontweight="bold",
+            )
 
     ax.set_ylabel('Gerçek')
     ax.set_xlabel('Tahmin')
@@ -131,8 +140,8 @@ def main():
     series, labels = load_team_timeseries(data_path)
     series = normalize_series(series)
 
-    # Stride düşürülerek daha fazla pencere/örnek üretilir
-    X, y_raw = window_series(series, labels, window_size=64, stride=8)
+    # Daha fazla pencere için daha küçük window + daha fazla overlap
+    X, y_raw = window_series(series, labels, window_size=32, stride=8)
     print(f"Pencere sayısı: {len(X)}")
 
     encoder = LabelEncoder()
@@ -140,6 +149,26 @@ def main():
     class_names = list(encoder.classes_)
     print(f"Sınıf etiketleri: {class_names}")
     print(f"Etiket dağılımı: {np.bincount(y)}")
+
+    # Sınıf dağılımını görselleştir (panelde kontrol için)
+    try:
+        import matplotlib.pyplot as plt
+
+        counts = np.bincount(y)
+        fig, ax = plt.subplots(figsize=(6, 3.5))
+        palette = ["#16a34a", "#f59e0b", "#dc2626"]
+        ax.bar(class_names, counts, color=palette[: len(class_names)])
+        ax.set_title("Sınıf Dağılımı (Pencere Etiketleri)", fontweight="bold")
+        ax.set_xlabel("Sınıf")
+        ax.set_ylabel("Pencere Sayısı")
+        ax.grid(axis="y", alpha=0.2)
+        fig.tight_layout()
+        dist_path = RESULTS_DIR / "team_label_distribution.png"
+        fig.savefig(dist_path, dpi=200)
+        plt.close(fig)
+        print(f"Sınıf dağılımı kaydedildi: {dist_path}")
+    except Exception as exc:
+        print(f"Sınıf dağılımı grafiği üretilemedi: {exc}")
 
     if len(X) < 5:
         raise ValueError("Yeterli pencere bulunamadı. Daha uzun bir zaman serisi gerekli.")
@@ -156,14 +185,14 @@ def main():
     print(f"Validasyon örnekleri: {len(X_val)}")
     print(f"Test örnekleri: {len(X_test)}")
 
-    model = build_team_cnn(input_shape=(64, 1), num_classes=len(class_names))
+    model = build_team_cnn(input_shape=(32, 1), num_classes=len(class_names))
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     ckpt_path = MODEL_DIR / "fbg_team_1dcnn_best.keras"
     callback_list = [
-        EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True),
-        ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=4, min_lr=1e-6, verbose=1),
+        EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True),
+        ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6, verbose=1),
         ModelCheckpoint(str(ckpt_path), monitor='val_loss', save_best_only=True, verbose=1),
     ]
 

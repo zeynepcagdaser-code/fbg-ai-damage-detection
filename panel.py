@@ -20,8 +20,8 @@ plt.rcParams.update({
     'lines.linewidth': 2,
 })
 
-WINDOW_SIZE = 64
-STRIDE = 16
+WINDOW_SIZE = 32
+STRIDE = 8
 MODEL_PATH = 'models/fbg_team_1dcnn.keras'
 RAW_LABELS = ['normal', 'mild_damage', 'severe_damage']
 DISPLAY_LABELS = {
@@ -63,6 +63,19 @@ def safe_load_model(model_path=MODEL_PATH):
     except Exception:
         return None
     return None
+
+
+def get_window_params_from_model(model):
+    window_size = WINDOW_SIZE
+    stride = STRIDE
+    try:
+        if model is not None and hasattr(model, "input_shape"):
+            shape = model.input_shape
+            if isinstance(shape, tuple) and len(shape) >= 3 and shape[1]:
+                window_size = int(shape[1])
+    except Exception:
+        pass
+    return window_size, stride
 
 
 def run_team_model_training():
@@ -303,7 +316,7 @@ def create_windows(df, window_size=WINDOW_SIZE, stride=STRIDE):
     noisy = df['delta_lambda_noisy'].astype(float).values
 
     if len(filtered) < window_size:
-        return None, None, None, "Veri uzunluğu 64'ten az. Lütfen daha uzun bir zaman serisi yükleyin."
+        return None, None, None, f"Veri uzunluğu {window_size}'ten az. Lütfen daha uzun bir zaman serisi yükleyin."
 
     filtered_norm = normalize_signal(filtered)
     noisy_norm = normalize_signal(noisy)
@@ -431,17 +444,17 @@ def render_confusion_matrix(cm):
     labels = [DISPLAY_LABELS[label] for label in RAW_LABELS]
     ax.set_xticks(np.arange(len(labels)))
     ax.set_yticks(np.arange(len(labels)))
-    ax.set_xticklabels(labels, rotation=45, ha='right')
-    ax.set_yticklabels(labels)
-    ax.set_xlabel('Tahmin Edilen')
-    ax.set_ylabel('Gerçek')
-    ax.set_title('Confusion Matrix', fontsize=14, fontweight='bold')
+    ax.set_xticklabels(labels, rotation=30, ha='right', fontsize=12)
+    ax.set_yticklabels(labels, fontsize=12)
+    ax.set_xlabel('Tahmin Edilen', fontsize=12)
+    ax.set_ylabel('Gerçek', fontsize=12)
+    ax.set_title('Karmaşıklık Matrisi (Confusion Matrix)', fontsize=14, fontweight='bold')
 
     thresh = cm.max() / 2.0
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
             color = 'white' if cm[i, j] > thresh else 'black'
-            ax.text(j, i, cm[i, j], ha='center', va='center', color=color, fontsize=12)
+            ax.text(j, i, cm[i, j], ha='center', va='center', color=color, fontsize=13, fontweight='bold')
 
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -497,7 +510,7 @@ def render_pipeline_timeline():
         {
             'title': '3️⃣ Feature Engineering',
             'owner': 'Gizem',
-            'description': 'Min-Max scaling + windowing (64) + stride (16).',
+            'description': 'Min-Max scaling + windowing (32) + stride (8).',
             'color': '#f5f3ff',
         },
         {
@@ -614,7 +627,7 @@ def plot_window_preview(filtered: np.ndarray, start_idx: int = 0):
     ax.plot(window, color="#2563eb", linewidth=2.4)
     ax.fill_between(np.arange(len(window)), window, color="#bfdbfe", alpha=0.4)
     ax.set_ylim(0, 1)
-    ax.set_title("Seçilen 64 Noktalık Pencere (Normalize)", fontsize=15, fontweight="bold")
+    ax.set_title("Seçilen 32 Noktalık Pencere (Normalize)", fontsize=15, fontweight="bold")
     ax.set_xlabel("Pencere İndeksi")
     ax.set_ylabel("Ölçeklenmiş Değer")
     ax.grid(alpha=0.2)
@@ -722,7 +735,7 @@ def render_gizem_section(aleyna_df: pd.DataFrame, aleyna_path: Path):
     with st.container():
         section_header(
             '3. Gizem - Ölçekleme, Pencereleme ve Etiketleme',
-            'Gizem, filtrelenmiş sinyali makine öğrenmesine uygun hale getirmek için Min-Max scaling, pencereleme (64) ve stride (16) adımlarını uygular.',
+            'Gizem, filtrelenmiş sinyali makine öğrenmesine uygun hale getirmek için Min-Max scaling, pencereleme (32) ve stride (8) adımlarını uygular.',
             aleyna_path.name,
         )
 
@@ -738,7 +751,7 @@ def render_gizem_section(aleyna_df: pd.DataFrame, aleyna_path: Path):
                 'Label encoding (3 sınıf)',
             ], accent_color='#eef2ff')
 
-        st.caption('Aşağıda örnek bir 64 noktalık pencere gösterilir (filtrelenmiş sinyalden).')
+        st.caption('Aşağıda örnek bir 32 noktalık pencere gösterilir (filtrelenmiş sinyalden).')
         max_start = max(0, len(filtered) - WINDOW_SIZE)
         start_idx = st.slider('Pencere başlangıç indeksi', 0, max_start, 0, key='gizem_window_start')
         st_show_fig(plot_window_preview(filtered, start_idx=start_idx))
@@ -833,13 +846,19 @@ def render_cnn_section(aleyna_df: pd.DataFrame):
                             st.code(logs, language='text')
             return None, None, None
 
-        windows, _, window_labels, err = create_windows(aleyna_df)
+        win, stride = get_window_params_from_model(model)
+        windows, _, window_labels, err = create_windows(aleyna_df, window_size=win, stride=stride)
         if windows is None:
             st.error(err)
             return model, None, None
 
         # Eğitim geçmişi (varsa)
         history_path = Path(__file__).parent / "results" / "team_cnn_history.csv"
+        dist_path = Path(__file__).parent / "results" / "team_label_distribution.png"
+        if dist_path.exists():
+            st.subheader('Sınıf Dağılımı (Eğitim Verisi)')
+            st.image(str(dist_path), caption='Pencere etiketlerinin sınıf dağılımı', use_container_width=True)
+
         if history_path.exists():
             try:
                 history_df = pd.read_csv(history_path)
@@ -868,7 +887,8 @@ def render_lstm_section(aleyna_df: pd.DataFrame):
             st.info('LSTM modeli henüz eğitilmedi. Emine tarafından geliştirilecek.')
             return None, None
 
-        windows, _, window_labels, err = create_windows(aleyna_df)
+        win, stride = get_window_params_from_model(lstm_model)
+        windows, _, window_labels, err = create_windows(aleyna_df, window_size=win, stride=stride)
         if windows is None:
             st.error(err)
             return lstm_model, None
@@ -1003,7 +1023,8 @@ def render_upload_section(model):
                         st.code(logs, language='text')
         return
 
-    windows, noisy_windows, window_labels, err = create_windows(df)
+    win, stride = get_window_params_from_model(model)
+    windows, noisy_windows, window_labels, err = create_windows(df, window_size=win, stride=stride)
     if windows is None:
         st.error(err)
         return
