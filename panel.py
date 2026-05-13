@@ -753,6 +753,15 @@ def render_model_metrics_section(model, windows, window_labels, model_name: str)
         st.metric('Toplam Pencere', f'{len(predicted_labels)}')
     with col2:
         st.metric('Ortalama Güven', f'%{probabilities.max(axis=1).mean() * 100:.1f}')
+    with col3:
+        detected_label = Counter(predicted_labels).most_common(1)[0][0] if predicted_labels else "-"
+        st.metric('Tespit Edilen Durum', detected_label)
+    with col4:
+        # Hasar oranı: (Hafif + Ağır) / toplam
+        total = len(predicted_labels)
+        damage_count = sum(1 for lbl in predicted_labels if lbl in ("Hafif Hasar", "Ağır Hasar"))
+        damage_ratio = (damage_count / total) * 100 if total else 0.0
+        st.metric('Hasar Oranı', f'%{damage_ratio:.1f}')
 
     if window_labels is None:
         st.info('Bu veri etiketsiz olduğu için doğruluk hesaplanamadı.')
@@ -775,24 +784,23 @@ def render_model_metrics_section(model, windows, window_labels, model_name: str)
     metrics_df = format_classification_report(y_true_test, y_pred_test)
     acc, precision, recall, f1 = summarize_metrics(y_true_test, y_pred_test)
 
-    with col3:
+    with st.expander("Model Değerlendirme (Test)", expanded=False):
         st.metric('Accuracy (Test)', f'%{acc * 100:.2f}')
-    with col4:
         st.metric('Macro F1 (Test)', f'{np.mean(f1):.3f}')
 
-    st.write('**Precision / Recall / F1 (Test)**')
-    metric_table = pd.DataFrame({
-        'Precision': precision,
-        'Recall': recall,
-        'F1': f1
-    }, index=[DISPLAY_LABELS[label] for label in RAW_LABELS])
-    st.dataframe(metric_table.style.format('{:.2f}'), use_container_width=True)
+        st.write('**Precision / Recall / F1 (Test)**')
+        metric_table = pd.DataFrame({
+            'Precision': precision,
+            'Recall': recall,
+            'F1': f1
+        }, index=[DISPLAY_LABELS[label] for label in RAW_LABELS])
+        st.dataframe(metric_table.style.format('{:.2f}'), use_container_width=True)
 
-    st.write('**Confusion Matrix (Test)**')
-    st_show_fig(render_confusion_matrix(cm))
+        st.write('**Confusion Matrix (Test)**')
+        st_show_fig(render_confusion_matrix(cm))
 
-    st.write('**Classification Report (Test)**')
-    st.dataframe(metrics_df.style.format('{:.2f}'), use_container_width=True)
+        st.write('**Classification Report (Test)**')
+        st.dataframe(metrics_df.style.format('{:.2f}'), use_container_width=True)
 
     return predicted_labels, probabilities
 

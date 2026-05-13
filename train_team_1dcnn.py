@@ -13,6 +13,7 @@ import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.utils.class_weight import compute_class_weight
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import (
@@ -130,7 +131,8 @@ def main():
     series, labels = load_team_timeseries(data_path)
     series = normalize_series(series)
 
-    X, y_raw = window_series(series, labels, window_size=64, stride=16)
+    # Stride düşürülerek daha fazla pencere/örnek üretilir
+    X, y_raw = window_series(series, labels, window_size=64, stride=8)
     print(f"Pencere sayısı: {len(X)}")
 
     encoder = LabelEncoder()
@@ -165,12 +167,18 @@ def main():
         ModelCheckpoint(str(ckpt_path), monitor='val_loss', save_best_only=True, verbose=1),
     ]
 
+    # Sınıf dengesizliği için class_weight
+    classes = np.unique(y_train)
+    class_weights_arr = compute_class_weight(class_weight="balanced", classes=classes, y=y_train)
+    class_weight = {int(cls): float(w) for cls, w in zip(classes, class_weights_arr)}
+
     history = model.fit(
         X_train, y_train,
         validation_data=(X_val, y_val),
         epochs=50,
         batch_size=8,
         callbacks=callback_list,
+        class_weight=class_weight,
         verbose=2
     )
 
