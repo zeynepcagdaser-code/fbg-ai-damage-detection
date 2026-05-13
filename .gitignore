@@ -18,3 +18,6 @@ results/
 # Model caches
 models/__pycache__/
 models/saved/
+
+# Legacy folder (artık kullanılmıyor)
+model/
