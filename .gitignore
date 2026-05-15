@@ -1,24 +1,5 @@
-.DS_Store
-Thumbs.db
-
-__pycache__/
-*.py[cod]
-
 .venv/
-venv/
-
-.vscode/*
-!.vscode/settings.json
-
+__pycache__/
+*.pyc
 *.log
-
-# Generated outputs
-plots/
-results/
-
-# Model caches
-models/__pycache__/
-models/saved/
-
-# Legacy folder (artık kullanılmıyor)
-model/
+.streamlit/secrets.toml
